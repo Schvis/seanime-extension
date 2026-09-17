@@ -50,7 +50,7 @@ function init() {
         var script = await ctx.dom.createElement("script");
         script.setText(`
           (() => {
-            const SCRIPT_VERSION = '9';
+            const SCRIPT_VERSION = '10';
             if (window.__ASKV_MENU_VERSION__ === SCRIPT_VERSION) return;
             window.__ASKV_MENU_VERSION__ = SCRIPT_VERSION;
             document.querySelectorAll('[data-account-switcher-menu="true"], [data-account-switcher-overlay="true"], [data-account-switcher-auth-request="true"]').forEach((node) => node.remove());
@@ -600,6 +600,7 @@ function init() {
       });
     }
 
+    injectMenuScript();
     ctx.dom.onReady(injectMenuScript);
     try {
       if (ctx.dom.onMainTabReady && typeof ctx.dom.onMainTabReady === "function") {
