@@ -19,45 +19,41 @@ function init() {
       }
     }
 
+    ctx.dom.observe("[data-account-switcher-auth-request='true']", async function(requests) {
+      for (var i = 0; i < requests.length; i++) {
+        var request = requests[i];
+        var state = await request.getAttribute("data-state");
+        if (state !== "pending") continue;
+
+        await request.setAttribute("data-state", "processing");
+        var token = await request.getAttribute("data-token");
+        if (!token) {
+          await request.setAttribute("data-result", "error:Missing AniList token");
+          continue;
+        }
+
+        try {
+          var loggedIn = await ctx.auth.login(token);
+          await request.setAttribute("data-result", loggedIn ? "success" : "cancelled");
+        } catch (e) {
+          var message = e && e.message ? e.message : String(e || "Unknown error");
+          ctx.toast.alert("Account switch failed: " + message);
+          await request.setAttribute("data-result", "error:" + message);
+        }
+      }
+    });
+
     function injectMenuScript() {
       ctx.dom.queryOne("body").then(async function(body) {
         if (!body) return;
 
-        var bridge = await ctx.dom.queryOne("#account-switcher-auth-bridge");
-        if (!bridge) {
-          bridge = await ctx.dom.createElement("button");
-          bridge.setAttribute("id", "account-switcher-auth-bridge");
-          bridge.setAttribute("type", "button");
-          bridge.setStyle("display", "none");
-          body.append(bridge);
-
-          bridge.addEventListener("click", async function() {
-            var token = await bridge.getAttribute("data-token");
-            var accountKey = await bridge.getAttribute("data-account-key");
-            var requestId = await bridge.getAttribute("data-request-id");
-            if (!token || !accountKey || !requestId) return;
-
-            try {
-              var loggedIn = await ctx.auth.login(token);
-              if (!loggedIn) {
-                bridge.setAttribute("data-result", "cancelled:" + requestId);
-                return;
-              }
-
-              bridge.setAttribute("data-result", "success:" + requestId);
-            } catch (e) {
-              var message = e && e.message ? e.message : String(e || "Unknown error");
-              ctx.toast.alert("Account switch failed: " + message);
-              bridge.setAttribute("data-result", "error:" + requestId);
-            }
-          });
-        }
-
         var script = await ctx.dom.createElement("script");
         script.setText(`
           (() => {
-            if (window.__ASKV_MENU_INSTALLED__) return;
-            window.__ASKV_MENU_INSTALLED__ = true;
+            const SCRIPT_VERSION = '2';
+            if (window.__ASKV_MENU_VERSION__ === SCRIPT_VERSION) return;
+            window.__ASKV_MENU_VERSION__ = SCRIPT_VERSION;
+            document.querySelectorAll('[data-account-switcher-menu="true"], [data-account-switcher-auth-request="true"]').forEach((node) => node.remove());
 
             const ACCOUNTS_KEY = ${JSON.stringify(ACCOUNTS_KEY)};
             const ACTIVE_KEY = ${JSON.stringify(ACTIVE_KEY)};
@@ -67,7 +63,7 @@ function init() {
             const PROFILE_TRIGGER_SELECTOR = '.UI-Avatar__root, .UI-Avatar__image, img[src*="anilistcdn/user/avatar"]';
             const ROOT_ATTR = 'data-account-switcher-menu';
             const ROOT_SELECTOR = '[' + ROOT_ATTR + '="true"]';
-            const AUTH_BRIDGE_SELECTOR = '#account-switcher-auth-bridge';
+            const AUTH_REQUEST_ATTR = 'data-account-switcher-auth-request';
             const ITEM_CLASS = 'UI-DropdownMenu__item relative flex select-none items-center rounded-xl cursor-pointer px-2 py-2 text-sm outline-none transition-colors focus:bg-[--subtle] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:mr-2 [&>svg]:text-lg';
             const INPUT_STYLE = 'width:100%;min-width:0;border:1px solid var(--border);border-radius:0.75rem;background:var(--background);color:var(--foreground);padding:0.5rem 0.75rem;font-size:0.875rem;outline:none;';
 
@@ -211,29 +207,47 @@ function init() {
               root.innerHTML = mode === 'add' ? addHtml() : mode === 'delete' ? deleteHtml() : listHtml();
             }
 
-            async function switchAccount(key) {
+            function switchAccount(key, target) {
               const account = loadAccountsLocal()[key];
               if (!account || !account.token) return;
-              const bridge = document.querySelector(AUTH_BRIDGE_SELECTOR);
-              if (!bridge) return;
 
-              const requestId = String(Date.now()) + '-' + Math.random().toString(36).slice(2);
-              const observer = new MutationObserver(() => {
-                const result = bridge.getAttribute('data-result') || '';
-                if (!result.endsWith(':' + requestId)) return;
+              const request = document.createElement('span');
+              request.setAttribute(AUTH_REQUEST_ATTR, 'true');
+              request.setAttribute('data-state', 'pending');
+              request.setAttribute('data-token', account.token);
+              request.style.display = 'none';
+
+              const label = target && target.querySelector ? target.querySelector('span:last-child') : null;
+              const previousLabel = label ? label.textContent : '';
+              if (label) label.textContent = 'Switching...';
+
+              const finish = (message) => {
                 observer.disconnect();
+                clearTimeout(timeout);
+                request.remove();
+                if (label && message) label.textContent = message;
+              };
 
-                if (result.indexOf('success:') === 0) {
+              const observer = new MutationObserver(() => {
+                const result = request.getAttribute('data-result') || '';
+                if (!result) return;
+
+                if (result === 'success') {
                   saveActiveLocal(key);
+                  finish('Reloading...');
                   window.location.reload();
+                  return;
                 }
-              });
-              observer.observe(bridge, { attributes: true, attributeFilter: ['data-result'] });
 
-              bridge.setAttribute('data-token', account.token);
-              bridge.setAttribute('data-account-key', key);
-              bridge.setAttribute('data-request-id', requestId);
-              bridge.click();
+                finish(result === 'cancelled' ? previousLabel : 'Switch failed');
+              });
+              observer.observe(request, { attributes: true, attributeFilter: ['data-result'] });
+
+              const timeout = setTimeout(() => {
+                finish('Switch timed out');
+              }, 15000);
+
+              document.body.appendChild(request);
             }
 
             function stop(event) {
@@ -254,7 +268,7 @@ function init() {
                 if (action === 'add') return render(root, 'add');
                 if (action === 'delete') return render(root, 'delete');
                 if (action === 'cancel' || action === 'back') return render(root, 'list');
-                if (action.indexOf('switch:') === 0) return switchAccount(action.slice(7));
+                if (action.indexOf('switch:') === 0) return switchAccount(action.slice(7), target);
                 if (action.indexOf('remove:') === 0) {
                   const key = action.slice(7);
                   const accounts = loadAccountsLocal();
@@ -308,11 +322,14 @@ function init() {
 
             function enhance(menu) {
               if (!isProfileMenu(menu)) return;
-              if (menu.querySelector(ROOT_SELECTOR)) return;
+              const existing = menu.querySelector(ROOT_SELECTOR);
+              if (existing && existing.getAttribute('data-account-switcher-version') === SCRIPT_VERSION) return;
+              if (existing) existing.remove();
 
               const signOut = Array.from(menu.querySelectorAll('[role="menuitem"]')).find((node) => exactText(node, 'sign out'));
               const root = document.createElement('div');
               root.setAttribute(ROOT_ATTR, 'true');
+              root.setAttribute('data-account-switcher-version', SCRIPT_VERSION);
               root.style.display = 'block';
               render(root, 'list');
               bind(root);
