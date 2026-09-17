@@ -50,7 +50,7 @@ function init() {
         var script = await ctx.dom.createElement("script");
         script.setText(`
           (() => {
-            const SCRIPT_VERSION = '7';
+            const SCRIPT_VERSION = '8';
             if (window.__ASKV_MENU_VERSION__ === SCRIPT_VERSION) return;
             window.__ASKV_MENU_VERSION__ = SCRIPT_VERSION;
             document.querySelectorAll('[data-account-switcher-menu="true"], [data-account-switcher-overlay="true"], [data-account-switcher-auth-request="true"]').forEach((node) => node.remove());
@@ -491,7 +491,11 @@ function init() {
                   return;
                 }
                 if (action.indexOf('edit:') === 0) return renderOverlay(overlay, 'form', action.slice(5));
-                if (action.indexOf('switch:') === 0) return switchAccount(action.slice(7), target);
+                if (action.indexOf('switch:') === 0) {
+                  const key = action.slice(7);
+                  closeOverlay();
+                  return switchAccount(key);
+                }
                 if (action.indexOf('remove:') === 0) {
                   const key = action.slice(7);
                   const accounts = loadAccountsLocal();
