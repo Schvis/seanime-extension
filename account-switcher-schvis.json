@@ -2,7 +2,7 @@
   "id": "account-switcher-schvis",
   "name": "Account Switcher",
   "version": "1.0.0",
-  "manifestURI": "https://raw.githubusercontent.com/Schvis/seanime-extension/bbe29f51b77f30e5254054c2e4923ceb74aafb39/account-switcher-schvis.json",
+  "manifestURI": "https://raw.githubusercontent.com/Schvis/seanime-extension/refs/heads/main/account-switcher-schvis.json",
   "language": "javascript",
   "type": "plugin",
   "description": "Save and switch between multiple AniList accounts from the profile menu.",
