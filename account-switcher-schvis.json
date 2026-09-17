@@ -7,7 +7,7 @@
   "type": "plugin",
   "description": "Save and switch between multiple AniList accounts from the profile menu.",
   "author": "kolex06",
-  "payload": "https://raw.githubusercontent.com/Schvis/seanime-extension/refs/heads/main/account-switcher.js"
+  "payload": "https://raw.githubusercontent.com/Schvis/seanime-extension/refs/heads/main/account-switcher.js",
   "plugin": {
     "version": "1",
     "permissions": {
