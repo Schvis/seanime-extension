@@ -50,7 +50,7 @@ function init() {
         var script = await ctx.dom.createElement("script");
         script.setText(`
           (() => {
-            const SCRIPT_VERSION = '4';
+            const SCRIPT_VERSION = '5';
             if (window.__ASKV_MENU_VERSION__ === SCRIPT_VERSION) return;
             window.__ASKV_MENU_VERSION__ = SCRIPT_VERSION;
             document.querySelectorAll('[data-account-switcher-menu="true"], [data-account-switcher-overlay="true"], [data-account-switcher-auth-request="true"]').forEach((node) => node.remove());
@@ -66,7 +66,7 @@ function init() {
             const AUTH_REQUEST_ATTR = 'data-account-switcher-auth-request';
             const OVERLAY_ATTR = 'data-account-switcher-overlay';
             const ITEM_CLASS = 'UI-DropdownMenu__item relative flex select-none items-center rounded-xl cursor-pointer px-2 py-2 text-sm outline-none transition-colors focus:bg-[--subtle] data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&>svg]:mr-2 [&>svg]:text-lg';
-            const INPUT_STYLE = 'width:100%;box-sizing:border-box;border:1px solid #4b4b4b;border-radius:4px;background:#262626;color:#fff;padding:0.85rem 1rem;font-size:0.95rem;outline:none;';
+            const INPUT_STYLE = 'width:100%;box-sizing:border-box;border:1px solid #4b4b4b;border-radius:8px;background:#262626;color:#fff;padding:0.85rem 1rem;font-size:0.95rem;outline:none;';
 
             function readJson(key, fallback) {
               try {
@@ -229,25 +229,48 @@ function init() {
               root.innerHTML = mode === 'form' ? accountFormHtml(key) : mode === 'edit' ? editHtml() : mode === 'delete' ? deleteHtml() : listHtml();
             }
 
-            function profileColor(key) {
-              const colors = ['#e50914', '#0071eb', '#46d369', '#f5a623', '#8b5cf6', '#ec4899', '#14b8a6'];
-              let hash = 0;
-              for (let i = 0; i < key.length; i++) hash = ((hash << 5) - hash + key.charCodeAt(i)) | 0;
-              return colors[Math.abs(hash) % colors.length];
+            const avatarCache = new Map();
+
+            async function loadAvatar(username) {
+              if (avatarCache.has(username)) return avatarCache.get(username);
+              try {
+                const response = await fetch('https://graphql.anilist.co', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                  body: JSON.stringify({
+                    query: 'query ($name: String) { User(name: $name) { avatar { large } } }',
+                    variables: { name: username }
+                  })
+                });
+                if (!response.ok) throw new Error('AniList request failed');
+                const payload = await response.json();
+                const avatar = payload && payload.data && payload.data.User && payload.data.User.avatar;
+                const url = avatar && avatar.large ? avatar.large : '';
+                avatarCache.set(username, url);
+                return url;
+              } catch (_) {
+                return '';
+              }
             }
 
-            function initials(username) {
-              const parts = String(username || '?').trim().split(/[^a-z0-9]+/i).filter(Boolean);
-              return (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : String(username || '?').slice(0, 2)).toUpperCase();
+            function loadProfileAvatars(root) {
+              root.querySelectorAll('[data-as-avatar]').forEach(async (image) => {
+                const username = image.getAttribute('data-as-avatar') || '';
+                const url = await loadAvatar(username);
+                if (!url || !image.isConnected || image.getAttribute('data-as-avatar') !== username) return;
+                image.src = url;
+                image.style.opacity = '1';
+              });
             }
 
             function profileTile(key, account, active, managing) {
               const action = managing ? 'edit:' + key : 'switch:' + key;
               return '<button type="button" data-as-action="' + escapeHtml(action) + '" class="as-profile" style="appearance:none;border:0;background:none;color:#b3b3b3;cursor:pointer;width:clamp(7rem,14vw,11rem);padding:0;font:inherit;">' +
-                '<span class="as-avatar" style="position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:6px;background:' + profileColor(key) + ';color:#fff;font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-0.08em;overflow:hidden;border:3px solid transparent;box-sizing:border-box;transition:transform .18s ease,border-color .18s ease;">' +
-                  escapeHtml(initials(account.username)) +
-                  (managing ? '<span style="position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.58);font-size:2.25rem;letter-spacing:0;">' + icon('edit') + '</span>' : '') +
-                  (active && !managing ? '<span style="position:absolute;right:.45rem;bottom:.45rem;display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:999px;background:#fff;color:#111;font-size:1rem;letter-spacing:0;">' + icon('check') + '</span>' : '') +
+                '<span class="as-avatar" style="position:relative;display:grid;place-items:center;aspect-ratio:1;border-radius:8px;background:#252525;color:#777;font-size:3rem;overflow:hidden;border:3px solid transparent;box-sizing:border-box;transition:transform .18s ease,border-color .18s ease;">' +
+                  icon('user') +
+                  '<img data-as-avatar="' + escapeHtml(account.username) + '" alt="' + escapeHtml(account.username) + ' profile avatar" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .18s ease;">' +
+                  (managing ? '<span style="position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.58);font-size:2.25rem;">' + icon('edit') + '</span>' : '') +
+                  (active && !managing ? '<span style="position:absolute;right:.45rem;bottom:.45rem;display:grid;place-items:center;width:1.7rem;height:1.7rem;border-radius:999px;background:#fff;color:#111;font-size:1rem;">' + icon('check') + '</span>' : '') +
                 '</span>' +
                 '<span data-as-label style="display:block;margin-top:.7rem;font-size:clamp(.9rem,1.8vw,1.2rem);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(account.username) + '</span>' +
               '</button>';
@@ -268,10 +291,10 @@ function init() {
                 '</button>';
               }
               return '<style>.as-profile:hover,.as-profile:focus-visible{color:#fff;outline:none}.as-profile:hover .as-avatar,.as-profile:focus-visible .as-avatar{border-color:#fff;transform:scale(1.04)}.as-profile [aria-hidden="true"]{margin:0!important}</style>' +
-                '<div style="width:min(92vw,76rem);text-align:center;">' +
-                '<h1 style="margin:0 0 clamp(2rem,5vh,4rem);color:#fff;font-size:clamp(2rem,6vw,4.5rem);font-weight:400;line-height:1.05;letter-spacing:-.035em;">' + (managing ? 'Manage Profiles' : "Who's watching?") + '</h1>' +
+                '<div style="width:100%;text-align:center;">' +
+                '<h1 style="margin:0 0 clamp(1.5rem,4vh,2.5rem);color:#fff;font-size:clamp(1.8rem,5vw,3rem);font-weight:500;line-height:1.05;letter-spacing:-.035em;">' + (managing ? 'Manage Profiles' : 'Switch Profile') + '</h1>' +
                 (keys.length ? '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:clamp(1.2rem,3vw,2.5rem);">' + profiles + '</div>' : '<div style="color:#b3b3b3;font-size:1.2rem;margin-bottom:2rem;">No profiles yet</div><div style="display:flex;justify-content:center;">' + profiles + '</div>') +
-                '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.8rem;margin-top:clamp(2.5rem,7vh,5rem);">' +
+                '<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.8rem;margin-top:clamp(2rem,5vh,3rem);">' +
                   (keys.length ? '<button type="button" data-as-action="toggle-manage" style="border:1px solid ' + (managing ? '#fff' : '#808080') + ';background:' + (managing ? '#fff' : 'transparent') + ';color:' + (managing ? '#111' : '#808080') + ';padding:.7rem 1.7rem;font-size:1rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;">' + (managing ? 'Done' : 'Manage Profiles') + '</button>' : '') +
                   '<button type="button" data-as-action="close" style="border:1px solid #808080;background:transparent;color:#808080;padding:.7rem 1.7rem;font-size:1rem;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;">Close</button>' +
                 '</div></div>';
@@ -280,8 +303,8 @@ function init() {
             function profileFormHtml(key) {
               const account = key ? loadAccountsLocal()[key] || {} : {};
               const editing = !!key;
-              return '<div style="width:min(90vw,32rem);">' +
-                '<h1 style="margin:0 0 .5rem;color:#fff;font-size:clamp(2rem,5vw,3.5rem);font-weight:400;">' + (editing ? 'Edit Profile' : 'Add Profile') + '</h1>' +
+              return '<div style="width:min(100%,32rem);margin:0 auto;">' +
+                '<h1 style="margin:0 0 .5rem;color:#fff;font-size:clamp(2rem,5vw,3rem);font-weight:500;">' + (editing ? 'Edit Profile' : 'Add Profile') + '</h1>' +
                 '<p style="margin:0 0 2rem;color:#b3b3b3;font-size:1rem;">Connect an AniList account to this profile.</p>' +
                 '<div style="display:flex;flex-direction:column;gap:.85rem;">' +
                   '<input data-as-field="username" type="text" placeholder="AniList username" autocomplete="off" value="' + escapeHtml(account.username || '') + '" style="' + INPUT_STYLE + '">' +
@@ -298,13 +321,14 @@ function init() {
             function renderOverlay(overlay, mode, key) {
               overlay.dataset.asMode = mode || 'chooser';
               overlay.dataset.asEditKey = key || '';
-              overlay.innerHTML = mode === 'form' ? profileFormHtml(key) : chooserHtml(mode === 'manage');
+              const panel = overlay.querySelector('[data-as-panel="true"]') || overlay;
+              panel.innerHTML = mode === 'form' ? profileFormHtml(key) : chooserHtml(mode === 'manage');
+              loadProfileAvatars(panel);
             }
 
             function closeOverlay() {
               const overlay = document.querySelector('[' + OVERLAY_ATTR + '="true"]');
               if (overlay) overlay.remove();
-              document.documentElement.style.overflow = '';
             }
 
             function openOverlay() {
@@ -313,11 +337,11 @@ function init() {
               overlay.setAttribute(OVERLAY_ATTR, 'true');
               overlay.setAttribute('role', 'dialog');
               overlay.setAttribute('aria-modal', 'true');
-              overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;overflow:auto;padding:clamp(2rem,6vw,5rem);box-sizing:border-box;background:radial-gradient(circle at 50% 35%,#242424 0,#141414 48%,#080808 100%);font-family:Inter,ui-sans-serif,system-ui,sans-serif;';
+              overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;overflow:auto;padding:clamp(1rem,4vw,2rem);box-sizing:border-box;background:rgba(0,0,0,.68);font-family:Inter,ui-sans-serif,system-ui,sans-serif;';
+              overlay.innerHTML = '<div data-as-panel="true" style="width:min(92vw,64rem);max-height:min(88vh,50rem);overflow:auto;box-sizing:border-box;padding:clamp(1.5rem,4vw,3rem);border:1px solid rgba(255,255,255,.12);border-radius:18px;background:#141414;box-shadow:0 24px 80px rgba(0,0,0,.65);"></div>';
               renderOverlay(overlay, 'chooser');
               bindOverlay(overlay);
               document.body.appendChild(overlay);
-              document.documentElement.style.overflow = 'hidden';
             }
 
             function extractToken(value) {
