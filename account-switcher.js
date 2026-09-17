@@ -50,7 +50,7 @@ function init() {
         var script = await ctx.dom.createElement("script");
         script.setText(`
           (() => {
-            const SCRIPT_VERSION = '8';
+            const SCRIPT_VERSION = '9';
             if (window.__ASKV_MENU_VERSION__ === SCRIPT_VERSION) return;
             window.__ASKV_MENU_VERSION__ = SCRIPT_VERSION;
             document.querySelectorAll('[data-account-switcher-menu="true"], [data-account-switcher-overlay="true"], [data-account-switcher-auth-request="true"]').forEach((node) => node.remove());
@@ -359,7 +359,7 @@ function init() {
               overlay.setAttribute('role', 'dialog');
               overlay.setAttribute('aria-modal', 'true');
               overlay.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:grid;place-items:center;overflow:auto;padding:clamp(1rem,4vw,2rem);box-sizing:border-box;background:color-mix(in srgb,var(--background) 68%,transparent);font-family:inherit;color:var(--foreground);';
-              overlay.innerHTML = '<div data-as-panel="true" style="width:min(92vw,30rem);max-height:min(88vh,44rem);overflow:auto;box-sizing:border-box;padding:1.25rem;border:1px solid var(--border);border-radius:calc(var(--radius,8px) + 8px);background:var(--background);color:var(--foreground);box-shadow:0 24px 80px color-mix(in srgb,var(--background) 65%,transparent);"></div>';
+              overlay.innerHTML = '<div data-as-panel="true" style="width:min(92vw,30rem);max-height:min(88vh,44rem);overflow:auto;box-sizing:border-box;padding:1.25rem;border:1px solid var(--border);border-radius:calc(var(--radius,8px) + 8px);background:var(--background);color:var(--foreground);"></div>';
               bindOverlay(overlay);
               document.body.appendChild(overlay);
               renderOverlay(overlay, 'chooser');

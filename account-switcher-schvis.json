@@ -1,7 +1,7 @@
 {
   "id": "account-switcher-schvis",
   "name": "Account Switcher",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "manifestURI": "https://raw.githubusercontent.com/Schvis/seanime-extension/refs/heads/main/account-switcher-schvis.json",
   "language": "javascript",
   "type": "plugin",
